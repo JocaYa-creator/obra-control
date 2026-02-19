@@ -76,14 +76,21 @@ try {
 
 // Si no hay config de Canvas (estamos en Vercel/Local), usa variables de entorno
 if (!firebaseConfig.apiKey) {
-  firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
-  };
+  try {
+    // RESTAURADO: Configuración para Vercel/Vite usando import.meta.env
+    // Esto asegura que la persistencia funcione al subir a Vercel
+    firebaseConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID
+    };
+  } catch (e) {
+    console.warn("Error leyendo variables de entorno (import.meta.env), usando config vacía", e);
+    firebaseConfig = {};
+  }
 }
 
 // 2. Inicialización de Firebase
@@ -1305,7 +1312,7 @@ const WeeklyReport = ({ data }) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Informe Semanal</h2>
-        <Button icon={Printer} variant="outline">Imprimir</Button>
+        <Button icon={Printer} variant="outline" onClick={() => window.print()}>Imprimir</Button>
       </div>
 
       {/* Bloque de Detalles (Ahora está arriba) */}
@@ -1489,7 +1496,29 @@ const WeeklyReport = ({ data }) => {
 // --- App Principal ---
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState(false);
+  // CORRECCIÓN: Inicializar darkMode comprobando el localStorage o la preferencia del sistema
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('obraControl_darkMode');
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  // CORRECCIÓN: Aplicar la clase 'dark' directamente al elemento HTML raíz
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('obraControl_darkMode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('obraControl_darkMode', 'false');
+    }
+  }, [darkMode]);
+
   const [activeTab, setActiveTab] = useState('planificacion');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isEditingProject, setIsEditingProject] = useState(false);
@@ -1631,8 +1660,8 @@ export default function App() {
   ];
 
   const totalSpent = ((projectData.labor || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0)) + 
-                   ((projectData.materials || []).filter(m => m.status === 'recibido').reduce((acc, curr) => acc + (curr.cost || 0), 0)) +
-                   ((projectData.stages || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0));
+                     ((projectData.materials || []).filter(m => m.status === 'recibido').reduce((acc, curr) => acc + (curr.cost || 0), 0)) +
+                     ((projectData.stages || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0));
    
   const remainingBudget = (activeProject.budget || 0) - totalSpent;
 
@@ -1641,7 +1670,8 @@ export default function App() {
   };
 
   return (
-    <div className={darkMode ? "dark" : ""}>
+    // Ya no necesitamos aplicar la clase aquí, se maneja en el useEffect sobre el elemento HTML
+    <div>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 flex transition-colors duration-300">
         
         {showSyncModal && (
