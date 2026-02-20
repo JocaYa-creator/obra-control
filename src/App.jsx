@@ -763,17 +763,17 @@ const IntegratedPlanning = ({ projectData, updateProjectData }) => {
       </div>
       <div className="min-h-[400px]">
         {subTab === 'gantt' && <GanttViewer file={projectData.ganttFile} onUpdate={(newFile) => updateProjectData('ganttFile', newFile)} />}
-        {subTab === 'board' && <StrategicPlanning data={projectData.tasks} onUpdate={(newData) => updateProjectData('tasks', newData)} />}
-        {subTab === 'log' && <DailyLog data={projectData.logs} onUpdate={(newData) => updateProjectData('logs', newData)} />}
+        {subTab === 'board' && <StrategicPlanning data={projectData.tasks || []} onUpdate={(newData) => updateProjectData('tasks', newData)} />}
+        {subTab === 'log' && <DailyLog data={projectData.logs || []} onUpdate={(newData) => updateProjectData('logs', newData)} />}
       </div>
     </div>
   );
 };
 
 const WeeklyReport = ({ data }) => {
-  const pendingMaterials = data.materials.filter(m => m.status === 'pendiente' || m.status === 'pedido');
-  const totalBudget = data.stages.reduce((acc, curr) => acc + (curr.totalCost || 0), 0);
-  const totalPaid = data.stages.reduce((acc, curr) => acc + (curr.paidAmount || 0), 0);
+  const pendingMaterials = (data.materials || []).filter(m => m.status === 'pendiente' || m.status === 'pedido');
+  const totalBudget = (data.stages || []).reduce((acc, curr) => acc + (curr.totalCost || 0), 0);
+  const totalPaid = (data.stages || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0);
   const totalLaborWeeklyRequest = (data.labor || []).reduce((acc, curr) => acc + (curr.weeklyRequest || 0), 0);
   const totalLaborBudget = (data.labor || []).reduce((acc, curr) => acc + (curr.totalBudget || 0), 0);
   const totalLaborPaid = (data.labor || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0);
@@ -917,9 +917,9 @@ const WeeklyReport = ({ data }) => {
 
           <div className="mt-4 print:break-inside-avoid">
              <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200 mb-2 print:text-black">Estado de Tareas Estratégicas</h4>
-             {data.tasks.length > 0 ? (
+             {(data.tasks || []).length > 0 ? (
                <div className="space-y-2">
-                 {data.tasks.map(task => (
+                 {(data.tasks || []).map(task => (
                    <div key={task.id} className="flex flex-col gap-1 text-sm border-b border-slate-100 dark:border-slate-700 pb-2 last:border-0 print:border-slate-300">
                      <div className="flex justify-between items-center">
                        <span className={`${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300 print:text-black'}`}>{task.task}</span>
@@ -934,7 +934,7 @@ const WeeklyReport = ({ data }) => {
              ) : (<p className="text-sm text-slate-400 italic">No hay tareas estratégicas registradas.</p>)}
           </div>
 
-          {data.tasks.filter(t => !t.completed && t.type === 'manage').length > 0 && (
+          {(data.tasks || []).filter(t => !t.completed && t.type === 'manage').length > 0 && (
             <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-3 rounded-lg border border-red-100 dark:border-red-900/30 flex items-start gap-2 mt-4 print:break-inside-avoid print:border-slate-300 print:bg-white print:text-black">
               <AlertTriangle className="mt-0.5 print:text-slate-600" size={16} />
               <div><p className="font-bold text-sm">Atención Requerida</p><p className="text-sm">Hay tareas de gestión pendientes que podrían bloquear avances.</p></div>
@@ -1004,6 +1004,50 @@ export default function App() {
     return 1;
   });
   const [showProjectMenu, setShowProjectMenu] = useState(false);
+
+  // --- NUEVAS FUNCIONES DE EXPORTAR / IMPORTAR ---
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(allData, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `obracontrol_respaldo_${projectKey}_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        if (importedData && typeof importedData === 'object' && Object.keys(importedData).length > 0) {
+          setAllData(importedData);
+          localStorage.setItem(`obraControl_data_${projectKey}`, JSON.stringify(importedData));
+          
+          // Intentar subir a la nube si está conectado
+          if (syncStatus === 'synced' || syncStatus === 'syncing') {
+             saveToCloud(importedData);
+          }
+          
+          alert("✅ ¡Datos importados correctamente!");
+          setShowSyncModal(false);
+        } else {
+          alert("El archivo no tiene el formato correcto.");
+        }
+      } catch (err) {
+        alert("🚨 Error al leer el archivo. Asegúrate de que sea un respaldo válido (.json).");
+      }
+    };
+    reader.readAsText(file);
+    // Limpiar el input para permitir cargar el mismo archivo dos veces si se necesita
+    e.target.value = null; 
+  };
+  // -----------------------------------------------
 
   const projects = Object.entries(allData).map(([id, data]) => ({
     id: Number(id),
@@ -1196,6 +1240,27 @@ export default function App() {
                 </div>
               </div>
 
+              {/* NUEVA SECCIÓN: IMPORTAR / EXPORTAR MANUALMENTE */}
+              <div className="mb-4 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
+                <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 mb-2 flex items-center gap-2">
+                  <FileText size={16} /> Respaldo Manual (Sin Nube)
+                </h4>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500 mb-3">
+                  Si la nube falla, puedes descargar tu proyecto y pasarlo a otro dispositivo (por Google Drive, WhatsApp o Mail) y cargarlo allí.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs py-1.5" onClick={handleExportData}>
+                    Exportar
+                  </Button>
+                  <div className="flex-1 relative">
+                    <input type="file" accept=".json" id="import-file" className="hidden" onChange={handleImportData} />
+                    <label htmlFor="import-file" className="flex items-center justify-center w-full bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs py-1.5 font-medium cursor-pointer transition-colors text-center h-full">
+                      Importar
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div className="mb-6 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">
                 <p>💡 <strong>¿Quieres usar otro dispositivo?</strong> Abre la web en tu celular, entra a Sincronizar, y pega el código de arriba para cargar tus datos.</p>
               </div>
@@ -1359,7 +1424,7 @@ export default function App() {
               {activeTab === 'planificacion' && <IntegratedPlanning projectData={projectData} updateProjectData={updateProjectData} />}
               {activeTab === 'honorarios' && <FeesManager data={projectData.fees || []} onUpdate={(newData) => updateProjectData('fees', newData)} />}
               {activeTab === 'mano_obra' && <LaborManager data={projectData.labor || []} onUpdate={(newData) => updateProjectData('labor', newData)} />}
-              {activeTab === 'materiales' && <MaterialsManager data={projectData.materials} onUpdate={(newData) => updateProjectData('materials', newData)} />}
+              {activeTab === 'materiales' && <MaterialsManager data={projectData.materials || []} onUpdate={(newData) => updateProjectData('materials', newData)} />}
               {activeTab === 'informes' && <WeeklyReport data={projectData} />}
             </div>
           </div>
