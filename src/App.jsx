@@ -57,6 +57,7 @@ import {
 } from 'firebase/auth';
 
 // --- Configuración Híbrida (OPTIMIZADA PARA VERCEL/VITE) ---
+// Esta función ahora detecta automáticamente si estás en Canvas o en Vercel
 const getEnvVar = (key) => {
   if (typeof process !== 'undefined' && process.env) {
     return process.env[key] || '';
@@ -67,14 +68,17 @@ const getEnvVar = (key) => {
 // 1. Configuración de Firebase
 let firebaseConfig;
 try {
+  // Intenta leer la config inyectada por Canvas
   firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 } catch (e) {
   firebaseConfig = {};
 }
 
-// Si no hay config inyectada, usamos variables de entorno de Vercel (Vite)
+// Si no hay config de Canvas (estamos en Vercel/Local), usa variables de entorno
 if (!firebaseConfig.apiKey) {
   try {
+    // RESTAURADO: Configuración para Vercel/Vite usando import.meta.env
+    // Esto asegura que la persistencia funcione al subir a Vercel
     firebaseConfig = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
       authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -83,8 +87,9 @@ if (!firebaseConfig.apiKey) {
       messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
       appId: import.meta.env.VITE_FIREBASE_APP_ID
     };
-  } catch(e) {
-    console.warn("Fallo al leer variables de entorno");
+  } catch (e) {
+    console.warn("Error leyendo variables de entorno (import.meta.env), usando config vacía", e);
+    firebaseConfig = {};
   }
 }
 
@@ -92,6 +97,7 @@ if (!firebaseConfig.apiKey) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// En producción usamos un ID por defecto si no hay uno inyectado
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'obra-control-prod';
 
 // 3. Configuración API Gemini
@@ -1223,7 +1229,7 @@ const GanttViewer = ({ file, onUpdate }) => {
 };
 
 const IntegratedPlanning = ({ projectData, updateProjectData }) => {
-  const [subTab, setSubTab] = useState('gantt'); 
+  const [subTab, setSubTab] = useState('gantt'); // Por defecto mostramos el Gantt primero si se desea, o 'board'
 
   return (
     <div className="space-y-6">
@@ -1284,11 +1290,13 @@ const WeeklyReport = ({ data }) => {
   const totalLaborPaid = (data.labor || []).reduce((acc, curr) => acc + (curr.paidAmount || 0), 0);
   const totalPendingMaterialsCost = pendingMaterials.reduce((acc, curr) => acc + (curr.cost || 0), 0);
 
+  // Nuevo cálculo: Suma total a pagar esta semana (Labor + Materiales Pendientes)
   const totalWeeklyPayment = totalLaborWeeklyRequest + totalPendingMaterialsCost;
 
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
    
+  // Filtramos logs de la última semana
   const weeklyLogs = (data.logs || []).filter(log => {
     const logDate = new Date(log.date + 'T00:00:00');
     return logDate >= sevenDaysAgo;
@@ -1301,15 +1309,21 @@ const WeeklyReport = ({ data }) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 print:space-y-4 print:block print:w-full">
+      <div className="flex justify-between items-center print:hidden">
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Informe Semanal</h2>
-        {/* Aquí está el cambio del botón Imprimir */}
         <Button icon={Printer} variant="outline" onClick={() => window.print()}>Imprimir</Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
+      {/* Encabezado exclusivo para impresión */}
+      <div className="hidden print:block border-b-2 border-slate-800 pb-2 mb-6">
+        <h1 className="text-3xl font-bold text-black">{data.name || 'Proyecto de Obra'}</h1>
+        <p className="text-slate-600 mt-1">Informe de Estado Semanal - Generado el {new Date().toLocaleDateString('es-AR')}</p>
+      </div>
+
+      {/* Bloque de Detalles (Ahora está arriba) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4 print:break-inside-avoid">
+        <Card className="p-6 print:shadow-none print:border-slate-300">
           <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Users size={20} /> Estado Mano de Obra
           </h3>
@@ -1329,7 +1343,7 @@ const WeeklyReport = ({ data }) => {
             </div>
             <div className="mt-4 space-y-2">
               {(data.labor || []).map(l => (
-                <div key={l.id} className="flex justify-between text-sm border-b border-slate-50 dark:border-slate-700 pb-2 last:border-0 text-slate-700 dark:text-slate-300">
+                <div key={l.id} className="flex justify-between text-sm border-b border-slate-50 dark:border-slate-700 pb-2 last:border-0 text-slate-700 dark:text-slate-300 print:border-slate-200">
                   <span>{l.name}</span>
                   <div className="flex gap-3">
                     {l.weeklyRequest > 0 && <span className="text-yellow-600 dark:text-yellow-500 font-bold">Pide: {formatCurrency(l.weeklyRequest)}</span>}
@@ -1341,14 +1355,14 @@ const WeeklyReport = ({ data }) => {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 print:shadow-none print:border-slate-300">
           <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Truck size={20} /> Compras Pendientes
           </h3>
           {pendingMaterials.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-700/50">
+                <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-700/50 print:bg-slate-100">
                   <tr>
                     <th className="px-2 py-2">Item</th>
                     <th className="px-2 py-2">Cant</th>
@@ -1357,7 +1371,7 @@ const WeeklyReport = ({ data }) => {
                 </thead>
                 <tbody className="text-slate-700 dark:text-slate-300">
                   {pendingMaterials.map(m => (
-                    <tr key={m.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0">
+                    <tr key={m.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 print:border-slate-200">
                       <td className="px-2 py-2 font-medium">{m.name}</td>
                       <td className="px-2 py-2 text-slate-500 dark:text-slate-400">{m.quantity}</td>
                       <td className="px-2 py-2 text-right font-medium">{formatCurrency(m.cost)}</td>
@@ -1372,41 +1386,45 @@ const WeeklyReport = ({ data }) => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/30">
+      {/* Bloque de Resumen (Movido abajo y reordenado) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-3 print:gap-4 print:break-inside-avoid">
+        {/* 1. Pedidos Mano de Obra */}
+        <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/30 print:bg-white print:border-slate-300 print:shadow-none">
           <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
             <HandCoins size={16} /> Pedidos Mano Obra
           </h3>
-          <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-500">{formatCurrency(totalLaborWeeklyRequest)}</p>
+          <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-500 print:text-black">{formatCurrency(totalLaborWeeklyRequest)}</p>
         </Card>
 
-        <Card className="p-4 bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-900/30">
+        {/* 2. Materiales Pendientes */}
+        <Card className="p-4 bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-900/30 print:bg-white print:border-slate-300 print:shadow-none">
           <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
             <Truck size={16} /> Materiales Pendientes
           </h3>
-          <p className="text-2xl font-bold text-orange-700 dark:text-orange-500">{pendingMaterials.length}</p>
-          <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">Est. {formatCurrency(totalPendingMaterialsCost)}</p>
+          <p className="text-2xl font-bold text-orange-700 dark:text-orange-500 print:text-black">{pendingMaterials.length}</p>
+          <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1 print:text-slate-600">Est. {formatCurrency(totalPendingMaterialsCost)}</p>
         </Card>
 
-        <Card className="p-4 bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30">
+        {/* 3. Total a Pagar (Ahora el último) */}
+        <Card className="p-4 bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 print:bg-white print:border-slate-300 print:shadow-none">
           <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
             <Wallet size={16} /> Total a Pagar (Semana)
           </h3>
-          <p className="text-2xl font-bold text-blue-700 dark:text-blue-500">{formatCurrency(totalWeeklyPayment)}</p>
-          <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1">Mat. + Mano de Obra</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-500 print:text-black">{formatCurrency(totalWeeklyPayment)}</p>
+          <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1 print:text-slate-600">Mat. + Mano de Obra</p>
         </Card>
       </div>
 
       {weeklyPhotos.length > 0 && (
-        <Card className="p-6">
+        <Card className="p-6 print:shadow-none print:border-slate-300 print:break-inside-avoid">
           <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Camera size={20} /> Galería de la Semana
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 print:grid-cols-3">
             {weeklyPhotos.map(log => (
-              <div key={log.id} className="group relative aspect-video overflow-hidden rounded-lg border dark:border-slate-700">
+              <div key={log.id} className="group relative aspect-video overflow-hidden rounded-lg border dark:border-slate-700 print:border-slate-300">
                 <img src={log.image} alt={`Foto del ${log.date}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity print:opacity-100 print:static print:bg-transparent print:text-black print:p-1 print:text-xs">
                   {new Date(log.date + 'T00:00:00').toLocaleDateString()} - {log.notes.substring(0, 30)}...
                 </div>
               </div>
@@ -1415,27 +1433,27 @@ const WeeklyReport = ({ data }) => {
         </Card>
       )}
 
-      <Card className="p-6">
+      <Card className="p-6 print:shadow-none print:border-slate-300 print:break-inside-auto">
         <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-slate-100">Resumen Ejecutivo</h3>
-        <div className="space-y-4 text-slate-600 dark:text-slate-300">
+        <div className="space-y-4 text-slate-600 dark:text-slate-300 print:text-black">
           <p>
             Esta semana se han registrado <strong>{weeklyLogs.length} entradas</strong> en la bitácora de obra. 
             El avance financiero global se encuentra al <strong>{Math.round(totalBudget > 0 ? (totalPaid / totalBudget) * 100 : 0)}%</strong>.
           </p>
 
-          <div className="space-y-2 mt-4">
+          <div className="space-y-2 mt-4 print:space-y-4">
             {weeklyLogs.length > 0 ? (
                 weeklyLogs.map(log => (
-                    <div key={log.id} className="bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <div key={log.id} className="bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg border border-slate-100 dark:border-slate-700 print:bg-white print:border-slate-300 print:break-inside-avoid">
                         <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-sm text-slate-700 dark:text-slate-200">
+                            <span className="font-bold text-sm text-slate-700 dark:text-slate-200 print:text-black">
                                 {new Date(log.date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' })}
                             </span>
-                            <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                            <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 print:bg-slate-100 print:text-black print:border print:border-slate-300">
                                 {log.weather}
                             </span>
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-300">{log.notes}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 print:text-black">{log.notes}</p>
                     </div>
                 ))
             ) : (
@@ -1443,19 +1461,19 @@ const WeeklyReport = ({ data }) => {
             )}
           </div>
 
-          <div className="mt-4">
-             <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200 mb-2">Estado de Tareas Estratégicas</h4>
+          <div className="mt-4 print:break-inside-avoid">
+             <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200 mb-2 print:text-black">Estado de Tareas Estratégicas</h4>
              {data.tasks.length > 0 ? (
                <div className="space-y-2">
                  {data.tasks.map(task => (
-                   <div key={task.id} className="flex flex-col gap-1 text-sm border-b border-slate-100 dark:border-slate-700 pb-2 last:border-0">
+                   <div key={task.id} className="flex flex-col gap-1 text-sm border-b border-slate-100 dark:border-slate-700 pb-2 last:border-0 print:border-slate-300">
                      <div className="flex justify-between items-center">
-                       <span className={`${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>{task.task}</span>
+                       <span className={`${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300 print:text-black'}`}>{task.task}</span>
                        <span className="font-bold text-xs">{task.completed ? '100%' : `${task.progress || 0}%`}</span>
                      </div>
                      {!task.completed && (
-                       <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
-                         <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${task.progress || 0}%` }}></div>
+                       <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 print:bg-slate-200">
+                         <div className="bg-blue-500 h-1.5 rounded-full print:bg-slate-600" style={{ width: `${task.progress || 0}%` }}></div>
                        </div>
                      )}
                    </div>
@@ -1467,8 +1485,8 @@ const WeeklyReport = ({ data }) => {
           </div>
 
           {data.tasks.filter(t => !t.completed && t.type === 'manage').length > 0 && (
-            <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-3 rounded-lg border border-red-100 dark:border-red-900/30 flex items-start gap-2 mt-4">
-              <AlertTriangle className="mt-0.5" size={16} />
+            <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-3 rounded-lg border border-red-100 dark:border-red-900/30 flex items-start gap-2 mt-4 print:break-inside-avoid print:border-slate-300 print:bg-white print:text-black">
+              <AlertTriangle className="mt-0.5 print:text-slate-600" size={16} />
               <div>
                 <p className="font-bold text-sm">Atención Requerida</p>
                 <p className="text-sm">Hay tareas de gestión pendientes que podrían bloquear avances.</p>
@@ -1484,7 +1502,7 @@ const WeeklyReport = ({ data }) => {
 // --- App Principal ---
 
 export default function App() {
-  // Cambio: Modo Oscuro Automático
+  // CORRECCIÓN: Inicializar darkMode comprobando el localStorage o la preferencia del sistema
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('obraControl_darkMode');
@@ -1496,6 +1514,7 @@ export default function App() {
     return false;
   });
 
+  // CORRECCIÓN: Aplicar la clase 'dark' directamente al elemento HTML raíz
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -1517,8 +1536,25 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('offline');
   const [inputKey, setInputKey] = useState('');
 
-  const [allData, setAllData] = useState(INITIAL_DB);
-  const [activeProjectId, setActiveProjectId] = useState(1);
+  // CORRECCIÓN 1: Cargar datos desde LocalStorage por defecto para evitar reseteos
+  const [allData, setAllData] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const key = localStorage.getItem('obraControl_projectKey') || projectKey;
+      const localData = localStorage.getItem(`obraControl_data_${key}`);
+      if (localData) {
+        return JSON.parse(localData);
+      }
+    }
+    return INITIAL_DB;
+  });
+  
+  const [activeProjectId, setActiveProjectId] = useState(() => {
+    if (typeof window !== 'undefined') {
+       const lastId = localStorage.getItem('obraControl_activeProject');
+       return lastId ? Number(lastId) : 1;
+    }
+    return 1;
+  });
   const [showProjectMenu, setShowProjectMenu] = useState(false);
 
   const projects = Object.entries(allData).map(([id, data]) => ({
@@ -1534,10 +1570,14 @@ export default function App() {
 
   useEffect(() => {
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("🚨 Error Auth Firebase: ¿Habilitaste 'Anónimo' en Firebase Console > Authentication?", error);
       }
     };
     initAuth();
@@ -1549,31 +1589,52 @@ export default function App() {
     if (!user) return;
     localStorage.setItem('obraControl_projectKey', projectKey);
     setSyncStatus('syncing');
+    
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'projects', projectKey);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data && data.fullData) {
           setAllData(data.fullData);
+          // Respaldar localmente lo que llega de la nube
+          localStorage.setItem(`obraControl_data_${projectKey}`, JSON.stringify(data.fullData));
           setSyncStatus('synced');
         }
       } else {
-        setDoc(docRef, { fullData: INITIAL_DB }, { merge: true })
+        // CORRECCIÓN 2: Si el documento no existe en la nube, sube nuestros datos actuales (NO INITIAL_DB)
+        setDoc(docRef, { fullData: allData }, { merge: true })
           .then(() => setSyncStatus('synced'))
-          .catch((e) => setSyncStatus('error'));
+          .catch((e) => {
+            console.error("Error al crear documento base en Firebase:", e);
+            setSyncStatus('error');
+          });
       }
-    }, (error) => setSyncStatus('error'));
+    }, (error) => {
+      console.error("🚨 Error Firebase Firestore: Revisa tus reglas de seguridad (Security Rules).", error);
+      setSyncStatus('error');
+    });
+    
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, projectKey]);
 
   const saveToCloud = async (newData) => {
+    // CORRECCIÓN 3: Actualizar siempre de forma local y persistente primero
     setAllData(newData);
-    if (!user) return;
+    localStorage.setItem(`obraControl_data_${projectKey}`, JSON.stringify(newData));
+    
+    if (!user) {
+      console.warn("⚠️ Usuario no autenticado en Firebase. Se guardó exitosamente en LocalStorage.");
+      return;
+    }
+    
     try {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'projects', projectKey);
       await setDoc(docRef, { fullData: newData }, { merge: true });
+      setSyncStatus('synced');
     } catch (e) {
-      console.error("Error saving to cloud", e);
+      console.error("🚨 Error guardando en Firebase (¿Faltan permisos en Firestore Rules?):", e);
+      setSyncStatus('error');
     }
   };
 
@@ -1603,6 +1664,7 @@ export default function App() {
 
   const switchProject = (id) => {
     setActiveProjectId(id);
+    localStorage.setItem('obraControl_activeProject', id);
     setShowProjectMenu(false);
   };
 
@@ -1634,6 +1696,10 @@ export default function App() {
     if (inputKey && inputKey.length > 3) {
       if (confirm("Al cambiar el código, se cargarán los datos asociados. ¿Seguro?")) {
         setProjectKey(inputKey);
+        // CORRECCIÓN 4: Cargar lo local inmediatamente al cambiar
+        const localData = localStorage.getItem(`obraControl_data_${inputKey}`);
+        if (localData) setAllData(JSON.parse(localData));
+        
         setShowSyncModal(false);
       }
     }
@@ -1657,9 +1723,9 @@ export default function App() {
   };
 
   return (
-    // Se quita la clase dark de este div raiz, ahora lo maneja document.documentElement
-    <div>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 flex transition-colors duration-300">
+    // Ya no necesitamos aplicar la clase aquí, se maneja en el useEffect sobre el elemento HTML
+    <div className="print:bg-white">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 flex transition-colors duration-300 print:block print:bg-white print:text-black">
         
         {showSyncModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1690,7 +1756,7 @@ export default function App() {
           </div>
         )}
 
-        <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} print:hidden`}>
           <div className="p-6 border-b border-slate-100 dark:border-slate-700">
             <div className="flex items-center gap-3 text-blue-700 dark:text-blue-400">
               <div className="bg-blue-600 text-white p-2 rounded-lg"><Hammer size={24} /></div>
@@ -1719,13 +1785,13 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col h-screen overflow-hidden">
-          <header className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between sticky top-0 z-10">
+        <main className="flex-1 flex flex-col h-screen overflow-hidden print:h-auto print:overflow-visible print:block">
+          <header className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between sticky top-0 z-10 print:hidden">
             <div className="flex items-center gap-2"><div className="bg-blue-600 text-white p-1.5 rounded-md"><Hammer size={18} /></div><span className="font-bold text-slate-800 dark:text-white truncate max-w-[150px]">{activeProject.name}</span></div>
             <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 rounded-lg"><Menu size={24} /></button>
           </header>
-          <div className="flex-1 overflow-auto p-4 md:p-8 max-w-5xl mx-auto w-full">
-            <div className="mb-6 space-y-4">
+          <div className="flex-1 overflow-auto p-4 md:p-8 max-w-5xl mx-auto w-full print:overflow-visible print:h-auto print:p-0 print:m-0 print:max-w-none print:block">
+            <div className="mb-6 space-y-4 print:hidden">
               <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
                 <div><div className="flex items-center gap-2 text-slate-400 text-sm mb-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" onClick={() => setIsEditingProject(true)}><Building size={14} /><span className="font-medium">{activeProject.name}</span><Pencil size={12} /></div><h2 className="text-2xl font-bold text-slate-800 dark:text-white">{navItems.find(i => i.id === activeTab)?.label}</h2></div>
                 <div className="hidden sm:block text-right"><Badge status={activeProject.status} /></div>
