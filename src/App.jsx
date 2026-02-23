@@ -893,7 +893,7 @@ const WeeklyReport = ({ data }) => {
   const totalWeeklyPayment = totalLaborWeeklyRequest + totalPendingMaterialsCost + totalFeesWeeklyRequest;
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-   
+    
   const weeklyLogs = (data.logs || []).filter(log => {
     const logDate = new Date(log.date + 'T00:00:00');
     return logDate >= sevenDaysAgo;
@@ -1083,7 +1083,7 @@ export default function App() {
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
-   
+    
   const [user, setUser] = useState(null);
   
   // CORRECCIÓN: Inicialización de clave y datos 100% atada a LocalStorage
