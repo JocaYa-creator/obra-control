@@ -199,13 +199,31 @@ const INITIAL_DB = {
 const DailyLog = ({ data, onUpdate }) => {
   const [newLog, setNewLog] = useState({ date: '', weather: 'Soleado', workers: '', notes: '', image: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAddLog = () => {
     if (!newLog.date || !newLog.notes) return;
-    onUpdate([{ id: Date.now(), ...newLog }, ...data]);
+    if (editingId) {
+      onUpdate(data.map(l => l.id === editingId ? { ...l, ...newLog } : l));
+      setEditingId(null);
+    } else {
+      onUpdate([{ id: Date.now(), ...newLog }, ...data]);
+    }
     setNewLog({ date: '', weather: 'Soleado', workers: '', notes: '', image: '' });
+    setIsFormOpen(false);
+  };
+
+  const startEdit = (log) => {
+    setNewLog({ date: log.date, weather: log.weather, workers: log.workers, notes: log.notes, image: log.image || '' });
+    setEditingId(log.id);
+    setIsFormOpen(true);
+  };
+
+  const cancelEdit = () => {
+    setNewLog({ date: '', weather: 'Soleado', workers: '', notes: '', image: '' });
+    setEditingId(null);
     setIsFormOpen(false);
   };
 
@@ -258,7 +276,7 @@ const DailyLog = ({ data, onUpdate }) => {
               <input type="url" placeholder="Pega aquí el enlace de la imagen..." className="p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 text-sm" value={newLog.image} onChange={e => setNewLog({ ...newLog, image: e.target.value })} />
               {newLog.image && <div className="relative w-full max-w-xs mt-2 overflow-hidden rounded-lg border dark:border-slate-600"><img src={newLog.image} alt="Vista previa" className="w-full h-auto object-cover max-h-48" onError={(e) => { e.target.style.display = 'none'; }} /></div>}
             </div>
-            <div className="flex gap-2 justify-end mt-2"><Button variant="secondary" onClick={() => setIsFormOpen(false)}>Cancelar</Button><Button onClick={handleAddLog}>Guardar Registro</Button></div>
+            <div className="flex gap-2 justify-end mt-2"><Button variant="secondary" onClick={cancelEdit}>Cancelar</Button><Button onClick={handleAddLog}>{editingId ? 'Guardar Cambios' : 'Guardar Registro'}</Button></div>
           </div>
         </Card>
       )}
@@ -271,7 +289,11 @@ const DailyLog = ({ data, onUpdate }) => {
                 <span className="font-bold text-lg text-slate-800 dark:text-slate-100">{new Date(log.date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
                 <span className="text-sm bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300">{log.weather}</span>
               </div>
-              <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1"><HardHat size={14} /> {log.workers} operarios</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1"><HardHat size={14} /> {log.workers} operarios</span>
+                <button onClick={() => startEdit(log)} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"><Pencil size={16} /></button>
+                <button onClick={() => onUpdate(data.filter(l => l.id !== log.id))} className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"><Trash2 size={16} /></button>
+              </div>
             </div>
             <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap mb-3">{log.notes}</p>
             {log.image && (
@@ -290,14 +312,30 @@ const DailyLog = ({ data, onUpdate }) => {
 
 const MaterialsManager = ({ data, onUpdate }) => {
   const [newItem, setNewItem] = useState({ name: '', quantity: '', cost: '', provider: '', category: 'Albañilería' });
+  const [editingId, setEditingId] = useState(null);
   const [filterCategory, setFilterCategory] = useState('Todos');
   const categories = ['Albañilería', 'Plomería', 'Electricidad', 'Estructura', 'Pintura', 'Terminaciones', 'Varios'];
   const formatCurrency = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
 
   const addItem = () => {
     if (!newItem.name) return;
-    onUpdate([...data, { id: Date.now(), ...newItem, cost: parseFloat(newItem.cost) || 0, status: 'pendiente', date: '-' }]);
+    if (editingId) {
+      onUpdate(data.map(item => item.id === editingId ? { ...item, ...newItem, cost: parseFloat(newItem.cost) || 0 } : item));
+      setEditingId(null);
+    } else {
+      onUpdate([...data, { id: Date.now(), ...newItem, cost: parseFloat(newItem.cost) || 0, status: 'pendiente', date: '-' }]);
+    }
     setNewItem({ name: '', quantity: '', cost: '', provider: '', category: 'Albañilería' });
+  };
+
+  const startEdit = (item) => {
+    setNewItem({ name: item.name, quantity: item.quantity, cost: item.cost, provider: item.provider || '', category: item.category });
+    setEditingId(item.id);
+  };
+
+  const cancelEdit = () => {
+    setNewItem({ name: '', quantity: '', cost: '', provider: '', category: 'Albañilería' });
+    setEditingId(null);
   };
 
   const updateStatus = (id, newStatus) => onUpdate(data.map(item => item.id === id ? { ...item, status: newStatus } : item));
@@ -326,7 +364,10 @@ const MaterialsManager = ({ data, onUpdate }) => {
           <select className="lg:col-span-2 p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })}>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
           <input placeholder="Proveedor..." className="lg:col-span-3 p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" value={newItem.provider} onChange={e => setNewItem({ ...newItem, provider: e.target.value })} />
         </div>
-        <div className="mt-4 flex justify-end"><Button onClick={addItem} icon={Plus}>Solicitar Material</Button></div>
+        <div className="mt-4 flex justify-end gap-2">
+          {editingId && <Button variant="secondary" onClick={cancelEdit}>Cancelar</Button>}
+          <Button onClick={addItem} icon={editingId ? Pencil : Plus}>{editingId ? 'Guardar Cambios' : 'Solicitar Material'}</Button>
+        </div>
       </Card>
 
       <div className="grid gap-3">
@@ -347,6 +388,7 @@ const MaterialsManager = ({ data, onUpdate }) => {
             <div className="flex gap-2 self-end sm:self-center">
               {item.status === 'pendiente' && <Button variant="secondary" onClick={() => updateStatus(item.id, 'pedido')} className="text-sm">Pedir</Button>}
               {item.status === 'pedido' && <Button variant="success" onClick={() => updateStatus(item.id, 'recibido')} className="text-sm">Recibir</Button>}
+              <Button variant="outline" className="text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2" onClick={() => startEdit(item)}><Pencil size={16} /></Button>
               <Button variant="outline" className="text-red-500 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/20 px-2" onClick={() => onUpdate(data.filter(i => i.id !== item.id))}><Trash2 size={16} /></Button>
             </div>
           </Card>
@@ -359,13 +401,31 @@ const MaterialsManager = ({ data, onUpdate }) => {
 
 const LaborManager = ({ data, onUpdate }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [newProvider, setNewProvider] = useState({ name: '', role: '', totalBudget: '' });
   const formatCurrency = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
 
   const addProvider = () => {
     if (!newProvider.name || !newProvider.totalBudget) return;
-    onUpdate([...data, { id: Date.now(), name: newProvider.name, role: newProvider.role || 'Contratista', totalBudget: parseFloat(newProvider.totalBudget) || 0, paidAmount: 0, progress: 0, weeklyRequest: 0 }]);
+    if (editingId) {
+      onUpdate(data.map(c => c.id === editingId ? { ...c, name: newProvider.name, role: newProvider.role || 'Contratista', totalBudget: parseFloat(newProvider.totalBudget) || 0 } : c));
+      setEditingId(null);
+    } else {
+      onUpdate([...data, { id: Date.now(), name: newProvider.name, role: newProvider.role || 'Contratista', totalBudget: parseFloat(newProvider.totalBudget) || 0, paidAmount: 0, progress: 0, weeklyRequest: 0 }]);
+    }
     setNewProvider({ name: '', role: '', totalBudget: '' });
+    setIsAdding(false);
+  };
+
+  const startEdit = (contractor) => {
+    setNewProvider({ name: contractor.name, role: contractor.role, totalBudget: contractor.totalBudget });
+    setEditingId(contractor.id);
+    setIsAdding(true);
+  };
+
+  const cancelEdit = () => {
+    setNewProvider({ name: '', role: '', totalBudget: '' });
+    setEditingId(null);
     setIsAdding(false);
   };
 
@@ -394,7 +454,7 @@ const LaborManager = ({ data, onUpdate }) => {
             <input placeholder="Rubro (ej: Electricista)" className="p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" value={newProvider.role} onChange={e => setNewProvider({ ...newProvider, role: e.target.value })} />
             <input type="number" placeholder="Presupuesto Total ($)" className="p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" value={newProvider.totalBudget} onChange={e => setNewProvider({ ...newProvider, totalBudget: e.target.value })} />
           </div>
-          <div className="flex justify-end gap-2"><Button onClick={() => setIsAdding(false)} variant="ghost">Cancelar</Button><Button onClick={addProvider}>Guardar</Button></div>
+          <div className="flex justify-end gap-2"><Button onClick={cancelEdit} variant="ghost">Cancelar</Button><Button onClick={addProvider}>{editingId ? 'Guardar Cambios' : 'Guardar'}</Button></div>
         </Card>
       )}
 
@@ -407,7 +467,12 @@ const LaborManager = ({ data, onUpdate }) => {
             <Card key={contractor.id} className="p-5 border-l-4 border-l-blue-500 dark:border-l-blue-400">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                 <div>
-                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">{contractor.name}<span className="text-xs font-normal bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600">{contractor.role}</span></h3>
+                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    {contractor.name}
+                    <span className="text-xs font-normal bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600">{contractor.role}</span>
+                    <button onClick={() => startEdit(contractor)} className="ml-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"><Pencil size={14} /></button>
+                    <button onClick={() => onUpdate(data.filter(c => c.id !== contractor.id))} className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"><Trash2 size={14} /></button>
+                  </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Presupuesto: <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(contractor.totalBudget)}</span></p>
                 </div>
                 <div className="flex items-center gap-4 w-full md:w-auto">
@@ -453,13 +518,31 @@ const LaborManager = ({ data, onUpdate }) => {
 
 const FeesManager = ({ data, onUpdate }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [newFee, setNewFee] = useState({ name: '', totalBudget: '' });
   const formatCurrency = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
 
   const addFee = () => {
     if (!newFee.name || !newFee.totalBudget) return;
-    onUpdate([...data, { id: Date.now(), name: newFee.name, totalBudget: parseFloat(newFee.totalBudget) || 0, paidAmount: 0, weeklyRequest: 0 }]);
+    if (editingId) {
+      onUpdate(data.map(c => c.id === editingId ? { ...c, name: newFee.name, totalBudget: parseFloat(newFee.totalBudget) || 0 } : c));
+      setEditingId(null);
+    } else {
+      onUpdate([...data, { id: Date.now(), name: newFee.name, totalBudget: parseFloat(newFee.totalBudget) || 0, paidAmount: 0, weeklyRequest: 0 }]);
+    }
     setNewFee({ name: '', totalBudget: '' });
+    setIsAdding(false);
+  };
+
+  const startEdit = (fee) => {
+    setNewFee({ name: fee.name, totalBudget: fee.totalBudget });
+    setEditingId(fee.id);
+    setIsAdding(true);
+  };
+
+  const cancelEdit = () => {
+    setNewFee({ name: '', totalBudget: '' });
+    setEditingId(null);
     setIsAdding(false);
   };
 
@@ -489,7 +572,7 @@ const FeesManager = ({ data, onUpdate }) => {
             <input placeholder="Concepto (ej: Dirección Técnica)" className="p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" value={newFee.name} onChange={e => setNewFee({ ...newFee, name: e.target.value })} />
             <input type="number" placeholder="Presupuesto Total ($)" className="p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" value={newFee.totalBudget} onChange={e => setNewFee({ ...newFee, totalBudget: e.target.value })} />
           </div>
-          <div className="flex justify-end gap-2"><Button onClick={() => setIsAdding(false)} variant="ghost">Cancelar</Button><Button onClick={addFee}>Guardar</Button></div>
+          <div className="flex justify-end gap-2"><Button onClick={cancelEdit} variant="ghost">Cancelar</Button><Button onClick={addFee}>{editingId ? 'Guardar Cambios' : 'Guardar'}</Button></div>
         </Card>
       )}
 
@@ -501,7 +584,11 @@ const FeesManager = ({ data, onUpdate }) => {
             <Card key={fee.id} className="p-5 border-l-4 border-l-purple-500 dark:border-l-purple-400">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                 <div>
-                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">{fee.name}</h3>
+                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    {fee.name}
+                    <button onClick={() => startEdit(fee)} className="ml-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"><Pencil size={14} /></button>
+                    <button onClick={() => onUpdate(data.filter(f => f.id !== fee.id))} className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"><Trash2 size={14} /></button>
+                  </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Presupuesto: <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(fee.totalBudget)}</span></p>
                 </div>
                 <div className="flex items-center gap-4 w-full md:w-auto">
@@ -599,7 +686,7 @@ const ProgressTracker = ({ data, onUpdate }) => {
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-500 uppercase">Costo Mano de Obra Total</label>
               <div className="relative"><DollarSign size={16} className="absolute left-3 top-3 text-slate-400" /><input type="number" className="w-full pl-8 p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="0.00" value={formData.totalCost} onChange={e => setFormData({ ...formData, totalCost: e.target.value })} /></div>
-            </div>
+              </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-500 uppercase">Total Pagado a la Fecha</label>
               <div className="relative"><DollarSign size={16} className="absolute left-3 top-3 text-slate-400" /><input type="number" className="w-full pl-8 p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="0.00" value={formData.paidAmount} onChange={e => setFormData({ ...formData, paidAmount: e.target.value })} /></div>
@@ -653,11 +740,30 @@ const StrategicPlanning = ({ data, onUpdate }) => {
   const [newType, setNewType] = useState('labor');
   const [newAssignee, setNewAssignee] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const addTask = () => {
     if (!newTask) return;
-    onUpdate([...data, { id: Date.now(), task: newTask, deadline: newDate || 'Sin fecha', completed: false, type: newType, assignee: newAssignee || 'Sin asignar', progress: 0 }]);
+    if (editingId) {
+      onUpdate(data.map(t => t.id === editingId ? { ...t, task: newTask, deadline: newDate || 'Sin fecha', type: newType, assignee: newAssignee || 'Sin asignar' } : t));
+      setEditingId(null);
+    } else {
+      onUpdate([...data, { id: Date.now(), task: newTask, deadline: newDate || 'Sin fecha', completed: false, type: newType, assignee: newAssignee || 'Sin asignar', progress: 0 }]);
+    }
     setNewTask(''); setNewDate(''); setNewAssignee(''); setNewType('labor');
+  };
+
+  const startEdit = (task) => {
+    setNewTask(task.task);
+    setNewDate(task.deadline === 'Sugerido por IA' || task.deadline === 'Sin fecha' ? '' : task.deadline);
+    setNewType(task.type);
+    setNewAssignee(task.assignee === 'Sin asignar' || task.assignee === 'Por definir' ? '' : task.assignee);
+    setEditingId(task.id);
+  };
+
+  const cancelEdit = () => {
+    setNewTask(''); setNewDate(''); setNewAssignee(''); setNewType('labor');
+    setEditingId(null);
   };
 
   const generateTasksWithAI = async () => {
@@ -696,8 +802,9 @@ const StrategicPlanning = ({ data, onUpdate }) => {
           <input className="md:col-span-12 p-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="Responsable o Proveedor (Ej: Juan Pérez, Corralón Norte...)" value={newAssignee} onChange={e => setNewAssignee(e.target.value)} />
         </div>
         <div className="flex gap-2 justify-end pt-2 border-t border-slate-200/50 dark:border-slate-700">
-          <Button variant="magic" onClick={generateTasksWithAI} disabled={!newTask || isGenerating} icon={isGenerating ? Loader2 : Sparkles} className={isGenerating ? "animate-pulse" : ""}>{isGenerating ? 'Generando...' : 'Sugerir Etapas IA'}</Button>
-          <Button onClick={addTask} icon={Plus}>Agregar Manual</Button>
+          {editingId && <Button variant="secondary" onClick={cancelEdit}>Cancelar</Button>}
+          {!editingId && <Button variant="magic" onClick={generateTasksWithAI} disabled={!newTask || isGenerating} icon={isGenerating ? Loader2 : Sparkles} className={isGenerating ? "animate-pulse" : ""}>{isGenerating ? 'Generando...' : 'Sugerir Etapas IA'}</Button>}
+          <Button onClick={addTask} icon={editingId ? Pencil : Plus}>{editingId ? 'Guardar Cambios' : 'Agregar Manual'}</Button>
         </div>
       </Card>
 
@@ -716,7 +823,10 @@ const StrategicPlanning = ({ data, onUpdate }) => {
                 <div className="mt-2 flex items-center gap-2 max-w-md"><input type="range" min="0" max="100" className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" value={task.progress || 0} onChange={(e) => updateProgress(task.id, e.target.value)} onClick={(e) => e.stopPropagation()} /><span className="text-xs text-slate-500 dark:text-slate-400 font-medium w-8 text-right">{task.progress || 0}%</span></div>
               </div>
             </div>
-            <div className="flex justify-end sm:self-center"><Button variant="outline" className="border-0 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 px-2 h-8 w-8 flex items-center justify-center" onClick={() => onUpdate(data.filter(t => t.id !== task.id))}><Trash2 size={16} /></Button></div>
+            <div className="flex justify-end sm:self-center gap-2">
+              <Button variant="outline" className="text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2" onClick={() => startEdit(task)}><Pencil size={16} /></Button>
+              <Button variant="outline" className="text-red-500 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/20 px-2" onClick={() => onUpdate(data.filter(t => t.id !== task.id))}><Trash2 size={16} /></Button>
+            </div>
           </div>
         ))}
         {data.length === 0 && <div className="text-center py-8 text-slate-400 dark:text-slate-500"><p>No hay tareas planificadas.</p><p className="text-sm">¡Prueba escribir un objetivo y usar el botón mágico ✨!</p></div>}
@@ -1164,6 +1274,32 @@ export default function App() {
     setShowProjectMenu(false);
   };
 
+  const deleteProject = (id, e) => {
+    e.stopPropagation();
+    if(!confirm('¿Estás seguro de eliminar esta obra y todos sus datos?')) return;
+    const updatedAllData = { ...allData };
+    delete updatedAllData[id];
+    
+    if (Object.keys(updatedAllData).length === 0) {
+      const newId = Date.now();
+      updatedAllData[newId] = { name: 'Nueva Obra', status: 'active', budget: 0, progress: 0, logs: [], materials: [], stages: [], tasks: [], labor: [], fees: [] };
+    }
+    
+    saveToCloud(updatedAllData);
+    
+    if (activeProjectId === id) {
+      const firstAvailableId = Number(Object.keys(updatedAllData)[0]);
+      setActiveProjectId(firstAvailableId);
+      localStorage.setItem('obraControl_activeProject', firstAvailableId);
+    }
+  };
+
+  const startEditProject = (id, e) => {
+    e.stopPropagation();
+    switchProject(id);
+    setIsEditingProject(true);
+  };
+
   const createNewProject = (name, budget) => {
     if (name) {
       const newId = Date.now();
@@ -1300,7 +1436,20 @@ export default function App() {
             {showProjectMenu && (
               <div className="absolute bottom-full left-4 right-4 mb-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden z-20">
                 <div className="p-3 bg-slate-50 dark:bg-slate-700 border-b border-slate-100 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200 text-sm flex justify-between items-center"><span>Mis Obras</span><button onClick={() => setShowProjectMenu(false)}><X size={16} /></button></div>
-                <div className="max-h-60 overflow-y-auto">{projects.map(p => (<button key={p.id} onClick={() => switchProject(p.id)} className={`w-full text-left p-3 text-sm hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 ${activeProjectId === p.id ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}><Building size={16} className="text-slate-400" /><span className="truncate flex-1">{p.name}</span></button>))}</div>
+                <div className="max-h-60 overflow-y-auto">
+                  {projects.map(p => (
+                    <div key={p.id} className={`w-full flex items-center justify-between p-2 text-sm hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors ${activeProjectId === p.id ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
+                      <button onClick={() => switchProject(p.id)} className="flex items-center gap-2 flex-1 truncate text-left px-1">
+                        <Building size={16} className="text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{p.name}</span>
+                      </button>
+                      <div className="flex items-center gap-1 ml-2">
+                        <button onClick={(e) => startEditProject(p.id, e)} className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"><Pencil size={14} /></button>
+                        <button onClick={(e) => deleteProject(p.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 rounded"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <div className="p-2 border-t border-slate-100 dark:border-slate-700"><button onClick={() => setIsCreatingProject(true)} className="w-full py-2 flex items-center justify-center gap-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg"><Plus size={16} /> Nueva Obra</button></div>
               </div>
             )}
