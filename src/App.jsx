@@ -1460,21 +1460,23 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col h-screen overflow-hidden print:h-auto print:overflow-visible print:block">
+        <main className="flex-1 flex flex-col h-screen overflow-hidden print:h-auto print:overflow-visible print:block relative">
           
-          {/* Header Móvil */}
-          <header className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between sticky top-0 z-10 print:hidden">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600 text-white p-1.5 rounded-md"><Hammer size={18} /></div>
-              <div className="flex flex-col">
-                <span className="font-bold text-slate-800 dark:text-white truncate max-w-[150px] leading-tight">{activeProject.name}</span>
+          {/* Barra Inferior Móvil (Reemplaza al header superior) */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 p-3 flex items-center justify-between z-20 print:hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)] dark:shadow-[0_-5px_15px_rgba(0,0,0,0.2)]">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="bg-blue-600 text-white p-2 rounded-xl shadow-sm flex-shrink-0"><Hammer size={20} /></div>
+              <div className="flex flex-col overflow-hidden">
+                <span className="font-bold text-slate-800 dark:text-white truncate leading-tight">{activeProject.name}</span>
                 <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1 mt-0.5">{projectKey} <SyncIndicator status={syncStatus} /></span>
               </div>
             </div>
-            <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 rounded-lg"><Menu size={24} /></button>
-          </header>
+            <button onClick={() => setSidebarOpen(true)} className="p-3 text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl shadow-md transition-all flex items-center gap-2 flex-shrink-0">
+              <Menu size={22} />
+            </button>
+          </div>
 
-          <div className="flex-1 overflow-auto p-4 md:p-8 max-w-5xl mx-auto w-full print:overflow-visible print:h-auto print:p-0 print:m-0 print:max-w-none print:block">
+          <div className="flex-1 overflow-auto p-4 pb-24 md:p-8 max-w-5xl mx-auto w-full print:overflow-visible print:h-auto print:p-0 print:m-0 print:max-w-none print:block">
             <div className="mb-6 space-y-4">
               <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 print:hidden">
                 <div>
